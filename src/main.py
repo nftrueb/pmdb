@@ -1,5 +1,5 @@
 import sys 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List
 
 import requests 
@@ -48,7 +48,7 @@ class EncounterTable:
 
 @dataclass
 class Area: 
-    tables: List[EncounterTable] = []
+    tables: List[EncounterTable] 
 
     def __str__(self): 
         s = ''
@@ -56,16 +56,24 @@ class Area:
             s += f'{table}\n'
         return s
 
-def get_site_data(area_name: str): 
-    url = f'https://www.serebii.net/pokearth/johto/{area_name}.shtml'
+def get_site_data(url: str): 
     response = requests.get(url)
     return BeautifulSoup(response.content, 'html.parser')
 
-def get_total_pm_list_data(): 
-    pass 
+def get_area_url(area_name: str): 
+    return 'https://www.serebii.net/pokearth/johto/{area_name}.shtml'
+
+def get_total_pm_list_data(command): 
+    global total_pm_list
+    soup = get_site_data(TOTAL_PM_LIST_URL)
+    total_pm_list = [
+        row.find_all('td', recursive=False)[2].find('a').string.lower()
+        for row in soup.find('table', 'dextable').find_all('tr', recursive=False)[2:]
+    ]
+    log.info(f'Updated total pokémon list. Current count is {len(total_pm_list)}')
 
 def get_new_area_data(area_name: str): 
-    soup = get_site_data(area_name)
+    soup = get_site_data(get_area_url(area_name))
     area_list = []
 
     # get tables that are tagged "extradextable"
@@ -116,7 +124,9 @@ def read_save_data():
             dex = []
 
         if file_layer.data_file_exists(TOTAL_PM_LIST_FN): 
-            total_pm_list = [ pm.strip() for pm in file_layer.load_text(TOTAL_PM_LIST_FN).split()]
+            total_pm_list = [ 
+                pm.strip() for pm in file_layer.load_text(TOTAL_PM_LIST_FN).split('\n')
+            ]
         else: 
             log.info('Total PM List file does not exist ... initializing with default value')
             total_pm_list = []
@@ -138,13 +148,26 @@ def write_save_data():
     except Exception as ex: 
         log.error('Failed to write save data', ex)
 
+def comm_rm(command): 
+    if len(command) != 2: 
+        log.error(f'Invalid structure for rm command: {' '.join(command)}')
+        return
+    
+    pm = command[1].title()
+    if pm in dex: 
+        while pm in dex: 
+            dex.remove(pm)
+        log.info(f'Successfully removed {pm}')
+    else: 
+        log.info(f'Unrecognized Pokémon: {pm}')
+
 def comm_add(command): 
     if len(command) != 2: 
         log.error(f'Invalid structure for add command: {' '.join(command)}')
         return
 
-    new_pm = command[1]
-    if new_pm in total_pm_list: 
+    new_pm = command[1].title()
+    if new_pm.lower() in total_pm_list: 
         dex.append(new_pm)
         log.info(f'Successfully added new Pokémon: {new_pm}')
     else: 
@@ -166,12 +189,24 @@ def comm_save(command):
 def comm_load(command): 
     read_save_data()
 
+def comm_last(command): 
+    if len(command) > 2 or (len(command) == 2 and not command[1].isdigit()): 
+        log.error('Invalid command structure for command: last {count}')
+
+    count = int(command[1]) if len(command) == 2 else 5
+    last = dex[-count:] if len(dex) > count else dex
+    for pm in last: 
+        print(f' - {pm}')
+
 REPL_FUNC_MAP = {
     'add'   : comm_add, 
     'dex'   : comm_dex, 
     'list'  : comm_list, 
     'save'  : comm_save, 
     'load'  : comm_load, 
+    'rm'    : comm_rm, 
+    'get'   : get_total_pm_list_data, 
+    'last'  : comm_last, 
 }
 
 def init_repl(): 

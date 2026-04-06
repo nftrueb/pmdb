@@ -11,8 +11,9 @@ REPL_DESCRIPTION_MAP = {
     'list' : 'print all areas for which encounter data has been saved',
     'save' : 'export dex and list data to json save file',
     'load' : 'read save data (read already occurs on startup)', 
-    'new'  : '{count} | lists the last {count} pokémon caught', 
-    'rm'   : '{pokémon | removes the specified pokémon from the dex list}'
+    'last'  : '{count} | lists the last {count} pokémon caught', 
+    'rm'   : '{pokémon} | removes the specified pokémon from the dex list', 
+    'get'  : 'parse the full list of Pokémon', 
 }
 
 APPNAME = 'PMDB'
@@ -24,3 +25,5 @@ TOTAL_PM_LIST_FN = 'total-pm-list.txt'
 THROW_AWAY_HEADERS = {
     'Pokťmon SoulSilver', 'Radio Pokťmon', 'Pokémon SoulSilver', 'Radio Pokémon'
 }
+
+TOTAL_PM_LIST_URL = 'https://www.serebii.net/pokemon/nationalpokedex.shtml'
