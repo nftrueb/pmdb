@@ -21,9 +21,14 @@ SAVE_FN = 'save.json'
 SAVE_AREA_LABEL = 'area_data'
 SAVE_DEX_LABEL = 'dex'
 TOTAL_PM_LIST_FN = 'total-pm-list.txt'
+MAP_GRAPH_FN = 'map.txt'
+MAP_GRAPH_DELIM = '---'
 
 THROW_AWAY_HEADERS = {
     'Pokťmon SoulSilver', 'Radio Pokťmon', 'Pokémon SoulSilver', 'Radio Pokémon'
 }
 
 TOTAL_PM_LIST_URL = 'https://www.serebii.net/pokemon/nationalpokedex.shtml'
+
+# Feature Flags 
+DEBUG_MAP_LOGS = True

@@ -24,6 +24,33 @@ context = {
 area_data = {}
 dex = []
 total_pm_list = []
+map_graph = {}
+
+@dataclass
+class Node: 
+    id: str 
+    area_name: str 
+    neighbors: List[Node]
+
+    def __repr__(self): 
+        return f'Node({self.id})'
+    
+    def __str__(self): 
+        s = 'Node(\n'
+        s += f'  id          : {self.id}\n' 
+        s += f'  area_name   : {self.area_name}\n'
+        for neighbor in self.neighbors: 
+            s += f'  neighbor_id : {neighbor}\n'
+        s += ')'
+        return s
+
+    def serialize(self): 
+        s = ''
+        s += f'{self.id}\n' 
+        s += f'{self.area_name}\n'
+        for neighbor in self.neighbors: 
+            s += f'{neighbor}\n'
+        return s[:-1]
 
 @dataclass
 class Encounter: 
@@ -109,7 +136,7 @@ def get_new_area_data(area_name: str):
     area_data[area_data] = Area(area_list)
 
 def read_save_data(): 
-    global area_data, dex, total_pm_list
+    global area_data, dex, total_pm_list, map_graph
     try: 
         if file_layer.data_file_exists(SAVE_FN): 
             save_data = file_layer.load_json(SAVE_FN)
@@ -131,6 +158,27 @@ def read_save_data():
             log.info('Total PM List file does not exist ... initializing with default value')
             total_pm_list = []
 
+        if file_layer.data_file_exists(MAP_GRAPH_FN): 
+            contents = file_layer.load_text(MAP_GRAPH_FN)
+            areas = [area.strip() for area in contents.split(MAP_GRAPH_DELIM)]
+            for area in areas: 
+                data = [ a.strip() for a in area.split('\n')]
+                if len(area) == 0: 
+                    continue 
+                elif len(data) < 3: 
+                    log.error(f'Invalid map data found: \n{data}')
+                    continue 
+                map_graph[data[0]] = Node(id=data[0], area_name=data[1], neighbors=data[2:])
+
+            if DEBUG_MAP_LOGS: 
+                for _, v in map_graph.items(): 
+                    log.debug(str(v))
+                log.debug(f'Map:\n' + ''.join([f'{k} -> {repr(v)}\n' for k, v in map_graph.items()]))
+                log.debug(f'Map area count: {len(map_graph.items())}')
+        else: 
+            log.info('Map info file (map.txt) does not exist ... initializing with default value')
+            map_graph = {}
+
     except Exception as ex: 
         log.error(ex)
         area_data = {}
@@ -145,6 +193,14 @@ def write_save_data():
         }
         file_layer.write_json(SAVE_FN, data)
         file_layer.write_text(TOTAL_PM_LIST_FN, '\n'.join(total_pm_list))
+
+        map_data = ''
+        nodes = list(map_graph.values())
+        if len(nodes) != 0: 
+            map_data = nodes[0].serialize()
+            map_data += ''.join(f'{MAP_GRAPH_DELIM}\n{node.serialize()}' for node in nodes[1:])
+
+        file_layer.write_text(MAP_GRAPH_FN, map_data)
     except Exception as ex: 
         log.error('Failed to write save data', ex)
 
