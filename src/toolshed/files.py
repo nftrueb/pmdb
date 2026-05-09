@@ -70,8 +70,8 @@ class FileLayer:
         except Exception as ex: 
             raise FatalFileException(f'Failed to load JSON file: {filename}') from ex
         
-    def write_json(self, filename: str, data: dict, use_data_dir=True): 
-        json_str = json.dumps(data, indent=4, sort_keys=True)
+    def write_json(self, filename: str, data: dict, cls=None, use_data_dir=True): 
+        json_str = json.dumps(data, indent=4, sort_keys=True, cls=cls)
         f = self.get_file_desc(filename, 'w', use_data_dir)
         length = f.write(json_str)
         f.close()

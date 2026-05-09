@@ -1,6 +1,7 @@
 import sys 
 from dataclasses import dataclass, field
 from typing import List
+from json import JSONEncoder, JSONDecoder
 
 import requests 
 from bs4 import BeautifulSoup
@@ -26,42 +27,48 @@ dex = []
 total_pm_list = []
 map_graph = {}
 
+class NodeEncoder(JSONEncoder): 
+    def default(self, obj): 
+        if isinstance(obj, Node): 
+            return {
+                'id': obj.id, 
+                'neighbors': obj.neighbors, 
+                'encounter_tables': obj.encounter_tables
+            }  
+
+        elif isinstance(obj, EncounterTable): 
+            return {
+                'method': obj.method, 
+                'encounters': obj.encounters
+            } 
+
+        elif isinstance(obj, Encounter): 
+            return {
+                'species': obj.species, 
+                'rate': obj.rate
+            } 
+
+        return super().default(obj)
+    
+# class NodeDecoder(JSONDecoder): 
+#     def default(self, dct): 
+
+
 @dataclass
 class Node: 
     id: str 
-    area_name: str 
     neighbors: List[Node]
+    encounter_tables: List[EncounterTable] 
 
-    def __repr__(self): 
-        return f'Node({self.id})'
-    
     def __str__(self): 
-        s = 'Node(\n'
-        s += f'  id          : {self.id}\n' 
-        s += f'  area_name   : {self.area_name}\n'
-        for neighbor in self.neighbors: 
-            s += f'  neighbor_id : {neighbor}\n'
-        s += ')'
-        return s
-
-    def serialize(self): 
         s = ''
-        s += f'{self.id}\n' 
-        s += f'{self.area_name}\n'
-        for neighbor in self.neighbors: 
+        s += f'{self.id}\n'
+        for neighbor in self.neighbors:
             s += f'{neighbor}\n'
-        return s[:-1]
-
-@dataclass
-class Encounter: 
-    species: str 
-    rate: int | None = None
-
-    def __str__(self): 
-        s = f'Species: {self.species}\n'
-        s += f'Rate: {self.rate if self.rate is not None else '-'}%'
+        for table in self.encounter_tables: 
+            s += f'{table}\n'
         return s
-
+    
 @dataclass
 class EncounterTable: 
     method: str 
@@ -74,21 +81,21 @@ class EncounterTable:
         return s
 
 @dataclass
-class Area: 
-    tables: List[EncounterTable] 
+class Encounter: 
+    species: str 
+    rate: int | None = None
 
     def __str__(self): 
-        s = ''
-        for table in self.tables: 
-            s += f'{table}\n'
+        s = f'Species: {self.species if self.species in dex else "---" }\n'
+        s += f'Rate: {self.rate if self.rate is not None else '-'}%'
         return s
-
+    
 def get_site_data(url: str): 
     response = requests.get(url)
     return BeautifulSoup(response.content, 'html.parser')
 
 def get_area_url(area_name: str): 
-    return 'https://www.serebii.net/pokearth/johto/{area_name}.shtml'
+    return f'https://www.serebii.net/pokearth/johto/{area_name}.shtml'
 
 def get_total_pm_list_data(command): 
     global total_pm_list
@@ -117,7 +124,7 @@ def get_new_area_data(area_name: str):
             )
         )
 
-    # get tables that are tagged "dextable"... for gift pokémon
+    # get tables that are tagged "dextable" (for gift pokémon)
     encounter_tables = [ 
         table for table in soup.find_all("table", "dextable")
         if table.find_all('tr')[0].string not in THROW_AWAY_HEADERS
@@ -133,77 +140,51 @@ def get_new_area_data(area_name: str):
             )
         )
 
-    area_data[area_data] = Area(area_list)
+    return area_list
+
+def as_encounter(data: dict) -> Encounter: 
+    return Encounter(data['species'], data['rate'])
+
+def as_encounter_table(data: dict) -> EncounterTable: 
+    return EncounterTable(data['method'], [ as_encounter(e_data) for e_data in data['encounters'] ])
+
+def as_node(data: dict) -> Node: 
+    return Node(
+        data['id'], 
+        data['neighbors'], 
+        [ as_encounter_table(table_data) for table_data in data['encounter_tables'] ]
+    )
 
 def read_save_data(): 
     global area_data, dex, total_pm_list, map_graph
     try: 
-        if file_layer.data_file_exists(SAVE_FN): 
-            save_data = file_layer.load_json(SAVE_FN)
-            if SAVE_AREA_LABEL not in save_data or SAVE_DEX_LABEL not in save_data: 
-                log.info(f'Save data is malformed. Check the file at {SAVE_FN}')
-                sys.exit(1)
-            area_data = save_data[SAVE_AREA_LABEL]
-            dex = save_data[SAVE_DEX_LABEL]
-        else: 
-            log.info('Save file does not exist ... initializing with default values')
-            area_data = {}
-            dex = []
+        file_layer = get_file_layer()
+        data = file_layer.load_json(SAVE_FN) 
+        print(data)
+        print(type(data))
 
-        if file_layer.data_file_exists(TOTAL_PM_LIST_FN): 
-            total_pm_list = [ 
-                pm.strip() for pm in file_layer.load_text(TOTAL_PM_LIST_FN).split('\n')
-            ]
-        else: 
-            log.info('Total PM List file does not exist ... initializing with default value')
-            total_pm_list = []
+        dex = data['dex']
+        for k, v in data['map'].items():
+            map_graph[k] = as_node(v)
 
-        if file_layer.data_file_exists(MAP_GRAPH_FN): 
-            contents = file_layer.load_text(MAP_GRAPH_FN)
-            areas = [area.strip() for area in contents.split(MAP_GRAPH_DELIM)]
-            for area in areas: 
-                data = [ a.strip() for a in area.split('\n')]
-                if len(area) == 0: 
-                    continue 
-                elif len(data) < 3: 
-                    log.error(f'Invalid map data found: \n{data}')
-                    continue 
-                map_graph[data[0]] = Node(id=data[0], area_name=data[1], neighbors=data[2:])
-
-            if DEBUG_MAP_LOGS: 
-                for _, v in map_graph.items(): 
-                    log.debug(str(v))
-                log.debug(f'Map:\n' + ''.join([f'{k} -> {repr(v)}\n' for k, v in map_graph.items()]))
-                log.debug(f'Map area count: {len(map_graph.items())}')
-        else: 
-            log.info('Map info file (map.txt) does not exist ... initializing with default value')
-            map_graph = {}
+        for k, v in map_graph.items(): 
+            print(k)
+            print(v)
 
     except Exception as ex: 
-        log.error(ex)
-        area_data = {}
-        dex = []
-        total_pm_list = []
+        log.error('Failed to read save data', ex)
+    
 
 def write_save_data():
     try: 
-        data = {
-            SAVE_AREA_LABEL: area_data, 
-            SAVE_DEX_LABEL: dex
-        }
-        file_layer.write_json(SAVE_FN, data)
-        file_layer.write_text(TOTAL_PM_LIST_FN, '\n'.join(total_pm_list))
-
-        map_data = ''
-        nodes = list(map_graph.values())
-        if len(nodes) != 0: 
-            map_data = nodes[0].serialize()
-            map_data += ''.join(f'{MAP_GRAPH_DELIM}\n{node.serialize()}' for node in nodes[1:])
-
-        file_layer.write_text(MAP_GRAPH_FN, map_data)
+        file_layer = get_file_layer()
+        file_layer.write_json(SAVE_FN, {"dex": dex, "map": map_graph}, cls=NodeEncoder) 
     except Exception as ex: 
         log.error('Failed to write save data', ex)
 
+#
+# Define REPL command functions
+#
 def comm_rm(command): 
     if len(command) != 2: 
         log.error(f'Invalid structure for rm command: {' '.join(command)}')
@@ -218,10 +199,19 @@ def comm_rm(command):
         log.info(f'Unrecognized Pokémon: {pm}')
 
 def comm_add(command): 
-    if len(command) != 2: 
+    if len(command) not in {2, 3}: 
         log.error(f'Invalid structure for add command: {' '.join(command)}')
         return
-
+    
+    if command[1] == 'route': 
+        if len(command) == 2: 
+            log.error(f'Invalid structure for add command: {' '.join(command)}')
+            return
+        log.debug(f'Getting area data for : {command[2]}')
+        new_area = Node(command[2], [], get_new_area_data(command[2]))
+        map_graph[command[2]] = new_area
+        return 
+    
     new_pm = command[1].title()
     if new_pm.lower() in total_pm_list: 
         dex.append(new_pm)
@@ -254,6 +244,9 @@ def comm_last(command):
     for pm in last: 
         print(f' - {pm}')
 
+def comm_print_route(command): 
+    print(map_graph[command[1]])
+
 REPL_FUNC_MAP = {
     'add'   : comm_add, 
     'dex'   : comm_dex, 
@@ -263,6 +256,7 @@ REPL_FUNC_MAP = {
     'rm'    : comm_rm, 
     'get'   : get_total_pm_list_data, 
     'last'  : comm_last, 
+    'x': comm_print_route
 }
 
 def init_repl(): 
