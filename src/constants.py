@@ -13,7 +13,7 @@ REPL_DESCRIPTION_MAP = {
     'load' : 'read save data (read already occurs on startup)', 
     'last'  : '{count} | lists the last {count} pokémon caught', 
     'rm'   : '{pokémon} | removes the specified pokémon from the dex list', 
-    'get'  : 'parse the full list of Pokémon', 
+    'get'  : 'parse the full list of Pokémon',
 }
 
 APPNAME = 'PMDB'

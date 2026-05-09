@@ -24,17 +24,7 @@ class Repl:
             sep = ''.join([' ' for _ in range(self.longest_command + 1 - len(k))]) + '-> '
             s += f'  {k}{sep}{v}\n'
 
-        # print screen 
         print(s)
-
-        # check if commands in description map match length of function map 
-        desc_keys = len(self.COMM_TO_DESCRIPTION.keys())
-        func_keys = len(self.COMM_TO_FUNC.keys()) + len(self.BUILTIN_TO_FUNC.keys())
-        if desc_keys !=func_keys: 
-            print('')
-            log.info('Usage screen does not match length of known commands...' +
-                    ' Did you update the usage message after adding a new command?'
-            )
 
     # BUILTIN CONSTANTS
     BUILTIN_TO_DESCRIPTION = {
@@ -63,10 +53,22 @@ class Repl:
     def register_commands(self, funcs, descriptions): 
         self.COMM_TO_FUNC = funcs 
         self.COMM_TO_DESCRIPTION = descriptions
-        self.COMM_TO_DESCRIPTION.update(self.BUILTIN_TO_DESCRIPTION)
+
+        # get all commands that do not have a description written for them
+        commands_without_usage = set(funcs.keys()).difference(descriptions.keys())
+        commands_without_func = set(descriptions.keys()).difference(funcs.keys())
+        for command in commands_without_usage:
+            self.COMM_TO_DESCRIPTION[command] = '- no description -'
+        for command in commands_without_func: 
+            self.COMM_TO_DESCRIPTION[command] = '- invalid command -'
+
+        # get len of longest command for formatting later
         self.longest_command = len(
             sorted(self.COMM_TO_DESCRIPTION.keys(), key=lambda x: len(x), reverse=True)[0]
         )
+
+        # update description map with builtin commands like help, clear, etc.
+        self.COMM_TO_DESCRIPTION.update(self.BUILTIN_TO_DESCRIPTION)
 
     def register_usage(self, usage, description): 
         self.usage = usage
