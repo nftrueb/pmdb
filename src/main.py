@@ -5,6 +5,7 @@ from json import JSONEncoder, JSONDecoder
 
 import requests 
 from bs4 import BeautifulSoup
+from pick import pick
 
 from toolshed import get_logger
 from toolshed.files import get_file_layer
@@ -26,6 +27,9 @@ area_data = {}
 dex = []
 total_pm_list = []
 map_graph = {}
+
+pm_list_segmented = {}
+national_dex = []
 
 class NodeEncoder(JSONEncoder): 
     def default(self, obj): 
@@ -49,22 +53,22 @@ class NodeEncoder(JSONEncoder):
             } 
 
         return super().default(obj)
-    
-# class NodeDecoder(JSONDecoder): 
-#     def default(self, dct): 
-
 
 @dataclass
 class Node: 
     id: str 
-    neighbors: List[Node]
+    neighbors: List[str]
     encounter_tables: List[EncounterTable] 
 
     def __str__(self): 
         s = ''
-        s += f'{self.id}\n'
+        s += f'ID: {self.id}\n'
+
+        s += f'\nNEIGHBORS: \n'
         for neighbor in self.neighbors:
             s += f'{neighbor}\n'
+
+        s += f'\nENCOUNTERS: \n'
         for table in self.encounter_tables: 
             s += f'{table}\n'
         return s
@@ -86,8 +90,12 @@ class Encounter:
     rate: int | None = None
 
     def __str__(self): 
-        s = f'Species: {self.species if self.species in dex else "---" }\n'
-        s += f'Rate: {self.rate if self.rate is not None else '-'}%'
+        species_str = self.species
+        if self.species not in dex and self.species not in national_dex: 
+            species_str = '---'
+
+        s = f'Species: {species_str}\n'
+        s += f'Rate: {self.rate if self.rate is not None else '-'}'
         return s
     
 def get_site_data(url: str): 
@@ -97,14 +105,26 @@ def get_site_data(url: str):
 def get_area_url(area_name: str): 
     return f'https://www.serebii.net/pokearth/johto/{area_name}.shtml'
 
-def get_total_pm_list_data(command): 
-    global total_pm_list
+def get_total_pm_list_data(): 
+    global total_pm_list, national_dex
     soup = get_site_data(TOTAL_PM_LIST_URL)
     total_pm_list = [
         row.find_all('td', recursive=False)[2].find('a').string.lower()
         for row in soup.find('table', 'dextable').find_all('tr', recursive=False)[2:]
     ]
-    log.info(f'Updated total pokémon list. Current count is {len(total_pm_list)}')
+    log.info(f'Created total pokémon list. Current count is {len(total_pm_list)}')
+
+    gens = [ 'gen1', 'gen2', 'gen3', 'gen4' ]
+    for gen in gens: 
+        soup = get_site_data(f'https://www.serebii.net/pokemon/{gen}pokemon.shtml')
+        pm_list_segmented[gen] = [
+            row.find_all('td', recursive=False)[2].find('a').string.lower()
+            for row in soup.find('table', 'dextable').find_all('tr', recursive=False)[2:]
+        ]
+        log.info(f'Created Pokémon list for {gen} | Count: {len(pm_list_segmented[gen])}')
+
+    national_dex = pm_list_segmented['gen3'] + pm_list_segmented['gen4']
+    log.info(f'Created National Dex. Count: {len(national_dex)}')
 
 def get_new_area_data(area_name: str): 
     soup = get_site_data(get_area_url(area_name))
@@ -140,7 +160,21 @@ def get_new_area_data(area_name: str):
             )
         )
 
-    return area_list
+    # get neighbor areas
+    neighbors_div = soup.find('table', 'tab').find('td', 'foocontent')
+    neighbors = neighbors_div.find_all('a', recursive=False)
+
+    return area_list, [ parse_route_from_serebii_endpoint(n['href']) for n in neighbors ]
+
+def parse_route_from_serebii_endpoint(area): 
+    suffix = '.shtml'
+    suffix_idx = area.find(suffix)
+    last_slash_idx = area.rfind('/') 
+    if suffix_idx != -1: 
+        area = area[:suffix_idx]
+    if last_slash_idx != -1: 
+        area = area[last_slash_idx+1:]
+    return area
 
 def as_encounter(data: dict) -> Encounter: 
     return Encounter(data['species'], data['rate'])
@@ -156,20 +190,15 @@ def as_node(data: dict) -> Node:
     )
 
 def read_save_data(): 
-    global area_data, dex, total_pm_list, map_graph
+    global area_data, dex, total_pm_list, map_graph, national_dex
     try: 
         file_layer = get_file_layer()
         data = file_layer.load_json(SAVE_FN) 
-        print(data)
-        print(type(data))
-
         dex = data['dex']
+        total_pm_list = data['total_pm_list']
+        national_dex = data['national_dex']
         for k, v in data['map'].items():
             map_graph[k] = as_node(v)
-
-        for k, v in map_graph.items(): 
-            print(k)
-            print(v)
 
     except Exception as ex: 
         log.error('Failed to read save data', ex)
@@ -177,8 +206,14 @@ def read_save_data():
 
 def write_save_data():
     try: 
+        data = {
+            "dex": dex, 
+            "map": map_graph, 
+            "total_pm_list": total_pm_list, 
+            "national_dex": national_dex,  
+        }
         file_layer = get_file_layer()
-        file_layer.write_json(SAVE_FN, {"dex": dex, "map": map_graph}, cls=NodeEncoder) 
+        file_layer.write_json(SAVE_FN, data, cls=NodeEncoder) 
     except Exception as ex: 
         log.error('Failed to write save data', ex)
 
@@ -208,7 +243,8 @@ def comm_add(command):
             log.error(f'Invalid structure for add command: {' '.join(command)}')
             return
         log.debug(f'Getting area data for : {command[2]}')
-        new_area = Node(command[2], [], get_new_area_data(command[2]))
+        encounters, neighbors = get_new_area_data(command[2])
+        new_area = Node(command[2], neighbors, encounters)
         map_graph[command[2]] = new_area
         return 
     
@@ -225,7 +261,7 @@ def comm_dex(command):
     print(f'Pokémon caught: {len(dex)}') 
 
 def comm_list(command): 
-    for key, _ in area_data.items(): 
+    for key, _ in map_graph.items(): 
         print(f' - {key}') 
     print(f'Total areas: {len(area_data.keys())}')
 
@@ -247,6 +283,42 @@ def comm_last(command):
 def comm_print_route(command): 
     print(map_graph[command[1]])
 
+def comm_get(command): 
+    options = [ key for key in map_graph.keys() ]
+    options.append(BACK_OPT)
+
+    option, _ = pick( options, 'Choose Area Name' )
+    if option != BACK_OPT: 
+        print(f'URL: {get_area_url(option)}')
+
+def comm_menu(command): 
+    options = [
+        GET_TOTAL_PM_LIST_OPT, 
+        'Print Gen 1', 
+        'Print Gen 2', 
+        'Print Gen 3', 
+        'Print Gen 4', 
+        'Print National Dex',
+        BACK_OPT
+    ]
+    option, _ = pick(options, 'Standalone Scripts:')
+
+    print(option)
+    
+    if option == GET_TOTAL_PM_LIST_OPT: 
+        get_total_pm_list_data()
+
+    elif option.startswith('Print Gen'): 
+        gen = ''.join(option.split(' ')[1:]).lower()
+        print(f'Printing {gen}')
+        for p in pm_list_segmented[gen]: 
+            print(p)
+
+    elif option == 'Print National Dex': 
+        for p in national_dex: 
+            print(p)
+        print(f'Count: {len(national_dex)}')
+
 REPL_FUNC_MAP = {
     'add'   : comm_add, 
     'dex'   : comm_dex, 
@@ -254,9 +326,10 @@ REPL_FUNC_MAP = {
     'save'  : comm_save, 
     'load'  : comm_load, 
     'rm'    : comm_rm, 
-    'get'   : get_total_pm_list_data, 
+    'get'   : comm_get, 
     'last'  : comm_last, 
-    'x': comm_print_route
+    'x': comm_print_route, 
+    'menu': comm_menu,
 }
 
 def init_repl(): 

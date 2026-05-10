@@ -13,7 +13,7 @@ REPL_DESCRIPTION_MAP = {
     'load' : 'read save data (read already occurs on startup)', 
     'last'  : '{count} | lists the last {count} pokémon caught', 
     'rm'   : '{pokémon} | removes the specified pokémon from the dex list', 
-    'get'  : 'parse the full list of Pokémon',
+    'get'  : '{route} | get the serebii url for specified route',
 }
 
 APPNAME = 'PMDB'
@@ -29,6 +29,11 @@ THROW_AWAY_HEADERS = {
 }
 
 TOTAL_PM_LIST_URL = 'https://www.serebii.net/pokemon/nationalpokedex.shtml'
+
+# Pick 
+BACK_OPT = '- BACK -'
+GET_TOTAL_PM_LIST_OPT = 'Get Total List of Pokémon'
+
 
 # Feature Flags 
 DEBUG_MAP_LOGS = True
