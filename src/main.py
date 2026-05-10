@@ -30,6 +30,12 @@ map_graph = {}
 
 pm_list_segmented = {}
 national_dex = []
+headbutt_unlocked = False
+national_dex_unlocked = False
+surf_unlocked = False
+old_rod_unlocked = False
+good_rod_unlocked = False
+super_rod_unlocked = False
 
 class NodeEncoder(JSONEncoder): 
     def default(self, obj): 
@@ -78,10 +84,31 @@ class EncounterTable:
     method: str 
     encounters: List[Encounter]
 
-    def __str__(self): 
-        s = f'Method: {self.method}\n'
+    def is_completed(self): 
+        # loop through encounters to find any that are valid but not finished
         for encounter in self.encounters: 
-            s += f'{encounter}\n'
+            if not headbutt_unlocked and self.method in ['Headbutt Pokťmon', 'Headbutt Pokémon']: 
+                continue 
+
+            if not surf_unlocked and self.method.startswith('Standard Surfing'): 
+                continue
+
+            if not old_rod_unlocked and self.method.startswith('Old Rod'): 
+                continue
+
+            if not good_rod_unlocked and self.method.startswith('Good Rod'): 
+                continue
+
+            if not super_rod_unlocked and self.method.startswith('Super Rod'): 
+                continue
+
+            if not encounter.is_completed():
+                return False
+        return True
+
+    def __str__(self): 
+        s = f'Method: {self.method} { CHECKMARK if self.is_completed() else RED_CROSS }\n'
+        s += f'{'\n'.join([str(encounter) for encounter in self.encounters])}'
         return s
 
 @dataclass
@@ -89,13 +116,15 @@ class Encounter:
     species: str 
     rate: int | None = None
 
-    def __str__(self): 
-        species_str = self.species
-        if self.species not in dex and self.species not in national_dex: 
-            species_str = '---'
+    def is_completed(self): 
+        # exempt species that are present in national dex if it hasn't been unlocked
+        if not national_dex_unlocked: 
+            return self.species in dex or self.species.lower() in national_dex
+        return self.species in dex
 
-        s = f'Species: {species_str}\n'
-        s += f'Rate: {self.rate if self.rate is not None else '-'}'
+    def __str__(self): 
+        s = f'Species: { self.species if self.is_completed() else '---' }\n'
+        s += f'Rate: { self.rate if self.rate is not None else '-' }'
         return s
     
 def get_site_data(url: str): 
@@ -191,12 +220,21 @@ def as_node(data: dict) -> Node:
 
 def read_save_data(): 
     global area_data, dex, total_pm_list, map_graph, national_dex
+    global headbutt_unlocked, national_dex_unlocked, surf_unlocked
+    global old_rod_unlocked, good_rod_unlocked, super_rod_unlocked
+
     try: 
         file_layer = get_file_layer()
         data = file_layer.load_json(SAVE_FN) 
         dex = data['dex']
         total_pm_list = data['total_pm_list']
         national_dex = data['national_dex']
+        headbutt_unlocked = data['headbutt_unlocked']
+        national_dex_unlocked = data['national_dex_unlocked']
+        surf_unlocked = data['surf_unlocked']
+        old_rod_unlocked = data['old_rod_unlocked']
+        good_rod_unlocked = data['good_rod_unlocked']
+        super_rod_unlocked = data['super_rod_unlocked']
         for k, v in data['map'].items():
             map_graph[k] = as_node(v)
 
@@ -211,6 +249,12 @@ def write_save_data():
             "map": map_graph, 
             "total_pm_list": total_pm_list, 
             "national_dex": national_dex,  
+            "headbutt_unlocked": headbutt_unlocked, 
+            "national_dex_unlocked": national_dex_unlocked,
+            "surf_unlocked": surf_unlocked, 
+            "old_rod_unlocked": old_rod_unlocked, 
+            "good_rod_unlocked": good_rod_unlocked, 
+            "super_rod_unlocked": good_rod_unlocked, 
         }
         file_layer = get_file_layer()
         file_layer.write_json(SAVE_FN, data, cls=NodeEncoder) 
@@ -242,8 +286,13 @@ def comm_add(command):
         if len(command) == 2: 
             log.error(f'Invalid structure for add command: {' '.join(command)}')
             return
-        log.debug(f'Getting area data for : {command[2]}')
-        encounters, neighbors = get_new_area_data(command[2])
+        
+        try: 
+            log.debug(f'Getting area data for : {command[2]}')
+            encounters, neighbors = get_new_area_data(command[2])
+        except Exception as ex: 
+            log.error('Failed to parse new area:', ex)
+
         new_area = Node(command[2], neighbors, encounters)
         map_graph[command[2]] = new_area
         return 
@@ -252,6 +301,7 @@ def comm_add(command):
     if new_pm.lower() in total_pm_list: 
         dex.append(new_pm)
         log.info(f'Successfully added new Pokémon: {new_pm}')
+        write_save_data()
     else: 
         log.info(f'Failed to add unrecognized Pokémon: {new_pm}')
 
@@ -262,7 +312,13 @@ def comm_dex(command):
 
 def comm_list(command): 
     for key, _ in map_graph.items(): 
-        print(f' - {key}') 
+        is_completed = True
+        for table in map_graph[key].encounter_tables: 
+            if not table.is_completed(): 
+                is_completed = False 
+                break
+        print(f' {CHECKMARK if is_completed else RED_CROSS} {key}') 
+
     print(f'Total areas: {len(area_data.keys())}')
 
 def comm_save(command): 
@@ -281,7 +337,10 @@ def comm_last(command):
         print(f' - {pm}')
 
 def comm_print_route(command): 
-    print(map_graph[command[1]])
+    if command[1] in map_graph: 
+        print(map_graph[command[1]])
+    else: 
+        log.error(f'Area not found in map: {command[1]}')
 
 def comm_get(command): 
     options = [ key for key in map_graph.keys() ]
@@ -292,6 +351,9 @@ def comm_get(command):
         print(f'URL: {get_area_url(option)}')
 
 def comm_menu(command): 
+    global headbutt_unlocked, national_dex_unlocked, surf_unlocked
+    global old_rod_unlocked, good_rod_unlocked, super_rod_unlocked
+
     options = [
         GET_TOTAL_PM_LIST_OPT, 
         'Print Gen 1', 
@@ -299,6 +361,12 @@ def comm_menu(command):
         'Print Gen 3', 
         'Print Gen 4', 
         'Print National Dex',
+        'Toggle Headbutt Unlock', 
+        'Toggle National Dex Unlock',
+        'Toggle Surf Unlock',
+        'Toggle Old Rod Unlock',
+        'Toggle Good Rod Unlock',
+        'Toggle Super Rod Unlock',
         BACK_OPT
     ]
     option, _ = pick(options, 'Standalone Scripts:')
@@ -318,6 +386,30 @@ def comm_menu(command):
         for p in national_dex: 
             print(p)
         print(f'Count: {len(national_dex)}')
+
+    elif option == 'Toggle Headbutt Unlock': 
+        log.info(f'Toggling Headbutt unlock from {headbutt_unlocked} to {not headbutt_unlocked}')
+        headbutt_unlocked = not headbutt_unlocked
+
+    elif option == 'Toggle National Dex Unlock': 
+        log.info(f'Toggling National Dex unlock from {national_dex_unlocked} to {not national_dex_unlocked}')
+        national_dex_unlocked = not national_dex_unlocked
+
+    elif option == 'Toggle Surf Unlock': 
+        log.info(f'Toggling Surf Unlock from {surf_unlocked} to {not surf_unlocked}')
+        surf_unlocked = not surf_unlocked
+
+    elif option == 'Toggle Old Rod Unlock': 
+        log.info(f'Toggling Old Rod Unlock from {old_rod_unlocked} to {not old_rod_unlocked}')
+        old_rod_unlocked = not old_rod_unlocked
+
+    elif option == 'Toggle Good Rod Unlock': 
+        log.info(f'Toggling Good Rod Unlock from {good_rod_unlocked} to {not good_rod_unlocked}')
+        good_rod_unlocked = not good_rod_unlocked
+
+    elif option == 'Toggle Super Rod Unlock': 
+        log.info(f'Toggling Super Rod Unlock from {super_rod_unlocked} to {not super_rod_unlocked}')
+        super_rod_unlocked = not super_rod_unlocked
 
 REPL_FUNC_MAP = {
     'add'   : comm_add, 

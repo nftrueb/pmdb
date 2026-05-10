@@ -34,6 +34,10 @@ TOTAL_PM_LIST_URL = 'https://www.serebii.net/pokemon/nationalpokedex.shtml'
 BACK_OPT = '- BACK -'
 GET_TOTAL_PM_LIST_OPT = 'Get Total List of Pokémon'
 
+# Unicode
+CHECKMARK = '\u2705'
+RED_CROSS = '\u274C'
+
 
 # Feature Flags 
 DEBUG_MAP_LOGS = True
