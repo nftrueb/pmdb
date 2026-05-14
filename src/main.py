@@ -2,6 +2,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import List
 from json import JSONEncoder, JSONDecoder
+from datetime import datetime
 
 import requests 
 from bs4 import BeautifulSoup
@@ -108,7 +109,7 @@ class EncounterTable:
 
     def __str__(self): 
         s = f'Method: {self.method} { CHECKMARK if self.is_completed() else RED_CROSS }\n'
-        s += f'{'\n'.join([str(encounter) for encounter in self.encounters])}'
+        s += f'{'\n'.join([str(encounter) for encounter in self.encounters])}\n'
         return s
 
 @dataclass
@@ -157,16 +158,16 @@ def get_total_pm_list_data():
 
 def get_new_area_data(area_name: str): 
     soup = get_site_data(get_area_url(area_name))
-    area_list = []
+    parsed_encounter_tables = []
 
     # get tables that are tagged "extradextable"
-    encounter_tables = soup.find_all("table", "extradextable")
-    for table in encounter_tables: 
+    encounter_tables_soup = soup.find_all("table", "extradextable")
+    for table in encounter_tables_soup: 
         rows = table.find_all('tr')
         method = rows[0].find('a')
         species = rows[3].find_all('td')
         rates = rows[5].find_all('td')
-        area_list.append(
+        parsed_encounter_tables.append(
             EncounterTable(
                 method.string, 
                 [ Encounter(species[i].string, rates[i].string) for i in range(len(species))]
@@ -174,15 +175,15 @@ def get_new_area_data(area_name: str):
         )
 
     # get tables that are tagged "dextable" (for gift pokémon)
-    encounter_tables = [ 
+    encounter_tables_soup = [ 
         table for table in soup.find_all("table", "dextable")
         if table.find_all('tr')[0].string not in THROW_AWAY_HEADERS
     ]
-    for table in encounter_tables: 
+    for table in encounter_tables_soup: 
         rows = table.find_all('tr')
         method = rows[0].find('a')
         species = rows[2].find_all('td')
-        area_list.append(
+        parsed_encounter_tables.append(
             EncounterTable(
                 method.string, 
                 [ Encounter(species[i].string) for i in range(len(species))]
@@ -193,7 +194,11 @@ def get_new_area_data(area_name: str):
     neighbors_div = soup.find('table', 'tab').find('td', 'foocontent')
     neighbors = neighbors_div.find_all('a', recursive=False)
 
-    return area_list, [ parse_route_from_serebii_endpoint(n['href']) for n in neighbors ]
+    return Node(
+        id=area_name, 
+        encounter_tables=parsed_encounter_tables, 
+        neighbors=[ parse_route_from_serebii_endpoint(n['href']) for n in neighbors ]
+    )
 
 def parse_route_from_serebii_endpoint(area): 
     suffix = '.shtml'
@@ -289,12 +294,10 @@ def comm_add(command):
         
         try: 
             log.debug(f'Getting area data for : {command[2]}')
-            encounters, neighbors = get_new_area_data(command[2])
+            map_graph[command[2]] = get_new_area_data(command[2])
         except Exception as ex: 
             log.error('Failed to parse new area:', ex)
 
-        new_area = Node(command[2], neighbors, encounters)
-        map_graph[command[2]] = new_area
         return 
     
     new_pm = command[1].title()

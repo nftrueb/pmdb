@@ -1,4 +1,5 @@
 import subprocess
+from datetime import datetime
 
 from . import get_logger
 
@@ -26,10 +27,14 @@ class Repl:
 
         print(s)
 
+    def print_history(self): 
+        print(self.history)
+
     # BUILTIN CONSTANTS
     BUILTIN_TO_DESCRIPTION = {
         'clear' :  'clear the screen (runs the OS clear command)',
         'help'  :  'prints this screen',
+        'history': 'prints the previous commands run in this REPL session',
         'quit'  :  'exit the REPL',
     }
     
@@ -42,11 +47,13 @@ class Repl:
         self.usage = ''
         self.description = ''
         self.running = False
+        self.history = ''
 
         self.prompt = prompt
         self.BUILTIN_TO_FUNC = {
         'clear': self.clear,
         'help': self.print_usage, 
+        'history': self.print_history, 
         'quit': self.quit, 
     }
 
@@ -92,10 +99,13 @@ class Repl:
             log.error('Error encountered in repl loop', ex) 
 
     def handle_command(self): 
-        command = [ word.strip() for word in input(self.prompt).split() ]
+        unparsed_command = input(self.prompt).strip()
+        command = [ word.strip() for word in unparsed_command.split() ]
 
         if len(command) == 0 or command[0].isspace(): 
             return 
+        
+        self.history += f'{datetime.now().strftime('%Y/%m/%d %H:%M:%S')} - {unparsed_command}\n'
 
         if command[0] in self.COMM_TO_FUNC.keys(): 
             self.COMM_TO_FUNC[command[0]](command)
