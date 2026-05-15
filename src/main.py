@@ -11,6 +11,7 @@ from pick import pick
 from toolshed import get_logger
 from toolshed.files import get_file_layer
 from toolshed.cli import Repl
+from toolshed.terminal import * 
 
 from constants import * 
 
@@ -100,7 +101,7 @@ class EncounterTable:
             if not good_rod_unlocked and self.method.startswith('Good Rod'): 
                 continue
 
-            if not super_rod_unlocked and self.method.startswith('Super Rod'): 
+            if not super_rod_unlocked and (self.method.startswith('Super Rod') or self.method == 'Fishing Swarms'): 
                 continue
 
             if not encounter.is_completed():
@@ -117,10 +118,11 @@ class Encounter:
     species: str 
     rate: int | None = None
 
-    def is_completed(self): 
+    def is_completed(self):    
         # exempt species that are present in national dex if it hasn't been unlocked
-        if not national_dex_unlocked: 
+        if not national_dex_unlocked and self.species is not None:
             return self.species in dex or self.species.lower() in national_dex
+        
         return self.species in dex
 
     def __str__(self): 
@@ -358,6 +360,7 @@ def comm_menu(command):
     global old_rod_unlocked, good_rod_unlocked, super_rod_unlocked
 
     options = [
+        'tui', 
         GET_TOTAL_PM_LIST_OPT, 
         'Print Gen 1', 
         'Print Gen 2', 
@@ -378,6 +381,10 @@ def comm_menu(command):
     
     if option == GET_TOTAL_PM_LIST_OPT: 
         get_total_pm_list_data()
+
+    elif option == 'tui': 
+        import curses
+        curses.wrapper(draw_display_and_wait_for_input)
 
     elif option.startswith('Print Gen'): 
         gen = ''.join(option.split(' ')[1:]).lower()
@@ -414,6 +421,29 @@ def comm_menu(command):
         log.info(f'Toggling Super Rod Unlock from {super_rod_unlocked} to {not super_rod_unlocked}')
         super_rod_unlocked = not super_rod_unlocked
 
+def comm_trade(command): 
+    if len(command) != 3: 
+        log.error('Invalid command structure for command: trade {pm} {area}')
+        return 
+    
+    if command[2] not in map_graph: 
+        log.error(f'Unknown area: {command[2]}')
+        return
+    
+    if command[1] not in total_pm_list: 
+        log.error(f'Invalid pokemon provided: {command[1]}')
+    species = command[1].title()
+
+    for table in map_graph[command[2]].encounter_tables: 
+        if table.method != 'Trade': 
+            continue 
+
+        for encounter in table.encounters: 
+            if encounter.species is not None: 
+                continue 
+            encounter.species = species
+            log.info(f'Logged trade pokemon: {species}')
+
 REPL_FUNC_MAP = {
     'add'   : comm_add, 
     'dex'   : comm_dex, 
@@ -425,6 +455,7 @@ REPL_FUNC_MAP = {
     'last'  : comm_last, 
     'x': comm_print_route, 
     'menu': comm_menu,
+    'trade': comm_trade,
 }
 
 def init_repl(): 
