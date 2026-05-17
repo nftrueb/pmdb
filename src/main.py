@@ -11,6 +11,7 @@ from pick import pick
 from toolshed import get_logger
 from toolshed.files import get_file_layer
 from toolshed.cli import Repl
+from toolshed.cli import print
 from toolshed.terminal import * 
 
 from constants import * 
@@ -384,7 +385,7 @@ def comm_menu(command):
 
     elif option == 'tui': 
         import curses
-        curses.wrapper(draw_display_and_wait_for_input)
+        print(curses.wrapper(draw_display_and_wait_for_input))
 
     elif option.startswith('Print Gen'): 
         gen = ''.join(option.split(' ')[1:]).lower()
@@ -469,10 +470,7 @@ def main():
     read_save_data()
 
     repl = init_repl()
-    if repl.is_init(): 
-        repl.run()
-    else: 
-        log.error('Failed to initialize Repl...')
+    run(repl)
 
 if __name__ == '__main__': 
     main()

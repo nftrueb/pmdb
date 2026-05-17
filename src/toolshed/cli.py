@@ -1,9 +1,66 @@
 import subprocess
 from datetime import datetime
+from curses import wrapper
 
 from . import get_logger
+from .terminal import *
 
 log = get_logger() 
+
+# TUI functions for drawing screen
+def get_cursor_prompt_pos(): 
+    w, h = os.get_terminal_size()
+    return (4, h-4)
+
+def draw_background(screen: curses.window, title = None): 
+    screen.clear()
+    border(screen, title) 
+
+def draw_cli_screen(screen: curses.window, title=None): 
+    # draw border aroudn entire window
+    draw_background(screen, title)
+
+    # draw border around bottom to highlight REPL command line 
+    w, h = os.get_terminal_size()
+    border(screen, dims=(0, h-5, None, None))
+
+    # prompt marker
+    screen.addch(h-4, 2, '>')
+
+    # cursor position
+    curses.curs_set(True)
+    x, y = get_cursor_prompt_pos()
+    screen.move(y, x)
+    screen.refresh()
+
+def handle_input_tui(screen: curses.window): 
+    draw_cli_screen(screen, 'Enter a command ...')
+    w, _ = os.get_terminal_size()
+
+    # get input char and add to command string if not newline and not longer than width of window 
+    curses.echo()
+    input_command = ''
+    while len(input_command) < w-1-4:
+        input_char = screen.getch()
+        if input_char == ord('\n'): 
+            break  # new line 
+        input_command += chr(input_char)
+        screen.refresh()
+    curses.noecho()
+
+    return input_command
+
+def print(s): 
+        curses
+
+def run(repl): 
+    if not isinstance(repl, Repl): 
+        log.error(f'Invalid obj passed to Repl run command: {repl}')
+    
+    if repl.tui: 
+        wrapper(repl.run)
+    else: 
+        repl.run()
 
 class Repl:
 
@@ -39,7 +96,7 @@ class Repl:
     }
     
     # INIT FUNCTIONS
-    def __init__(self, prompt='> '):
+    def __init__(self, prompt='> ', tui=True):
         self.longest_command = 0  
         self.COMM_TO_FUNC = {}
         self.COMM_TO_DESCRIPTION = {}
@@ -48,6 +105,7 @@ class Repl:
         self.description = ''
         self.running = False
         self.history = ''
+        self.tui = tui
 
         self.prompt = prompt
         self.BUILTIN_TO_FUNC = {
@@ -89,17 +147,18 @@ class Repl:
         )
 
     # RUNNING FUNCTIONS
-    def run(self): 
+    def run(self, screen: curses.window = None): 
         self.running = True
         try: 
             while self.running: 
-                self.handle_command()
-                
+                self.handle_command(screen)
+                break 
+            
         except Exception as ex: 
             log.error('Error encountered in repl loop', ex) 
 
-    def handle_command(self): 
-        unparsed_command = input(self.prompt).strip()
+    def handle_command(self, screen: curses.window = None):
+        unparsed_command = handle_input_tui(screen) if self.tui else input(self.prompt).strip() 
         command = [ word.strip() for word in unparsed_command.split() ]
 
         if len(command) == 0 or command[0].isspace(): 
