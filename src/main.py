@@ -10,8 +10,7 @@ from pick import pick
 
 from toolshed import get_logger
 from toolshed.files import get_file_layer
-from toolshed.cli import Repl
-from toolshed.cli import print
+from toolshed.cli import Repl, stdout, run
 from toolshed.terminal import * 
 
 from constants import * 
@@ -313,8 +312,8 @@ def comm_add(command):
 
 def comm_dex(command): 
     for pm in dex: 
-        print(f' - {pm}')
-    print(f'Pokémon caught: {len(dex)}') 
+        stdout(f' - {pm}')
+    stdout(f'Pokémon caught: {len(dex)}') 
 
 def comm_list(command): 
     for key, _ in map_graph.items(): 
@@ -323,9 +322,9 @@ def comm_list(command):
             if not table.is_completed(): 
                 is_completed = False 
                 break
-        print(f' {CHECKMARK if is_completed else RED_CROSS} {key}') 
+        stdout(f' {CHECKMARK if is_completed else RED_CROSS} {key}') 
 
-    print(f'Total areas: {len(area_data.keys())}')
+    stdout(f'Total areas: {len(area_data.keys())}')
 
 def comm_save(command): 
     write_save_data()  
@@ -340,11 +339,11 @@ def comm_last(command):
     count = int(command[1]) if len(command) == 2 else 5
     last = dex[-count:] if len(dex) > count else dex
     for pm in last: 
-        print(f' - {pm}')
+        stdout(f' - {pm}')
 
 def comm_print_route(command): 
     if command[1] in map_graph: 
-        print(map_graph[command[1]])
+        stdout(map_graph[command[1]])
     else: 
         log.error(f'Area not found in map: {command[1]}')
 
@@ -354,7 +353,7 @@ def comm_get(command):
 
     option, _ = pick( options, 'Choose Area Name' )
     if option != BACK_OPT: 
-        print(f'URL: {get_area_url(option)}')
+        stdout(f'URL: {get_area_url(option)}')
 
 def comm_menu(command): 
     global headbutt_unlocked, national_dex_unlocked, surf_unlocked
@@ -378,25 +377,25 @@ def comm_menu(command):
     ]
     option, _ = pick(options, 'Standalone Scripts:')
 
-    print(option)
+    stdout(option)
     
     if option == GET_TOTAL_PM_LIST_OPT: 
         get_total_pm_list_data()
 
     elif option == 'tui': 
         import curses
-        print(curses.wrapper(draw_display_and_wait_for_input))
+        stdout(curses.wrapper(draw_display_and_wait_for_input))
 
     elif option.startswith('Print Gen'): 
         gen = ''.join(option.split(' ')[1:]).lower()
-        print(f'Printing {gen}')
+        stdout(f'Printing {gen}')
         for p in pm_list_segmented[gen]: 
-            print(p)
+            stdout(p)
 
     elif option == 'Print National Dex': 
         for p in national_dex: 
-            print(p)
-        print(f'Count: {len(national_dex)}')
+            stdout(p)
+        stdout(f'Count: {len(national_dex)}')
 
     elif option == 'Toggle Headbutt Unlock': 
         log.info(f'Toggling Headbutt unlock from {headbutt_unlocked} to {not headbutt_unlocked}')

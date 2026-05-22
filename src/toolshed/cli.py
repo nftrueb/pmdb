@@ -7,25 +7,27 @@ from .terminal import *
 
 log = get_logger() 
 
+PROMPT = '❯'
+
 # TUI functions for drawing screen
 def get_cursor_prompt_pos(): 
     w, h = os.get_terminal_size()
-    return (4, h-4)
+    return (4, h-3)
 
 def draw_background(screen: curses.window, title = None): 
     screen.clear()
     border(screen, title) 
 
 def draw_cli_screen(screen: curses.window, title=None): 
-    # draw border aroudn entire window
+    # draw border around entire window
     draw_background(screen, title)
 
     # draw border around bottom to highlight REPL command line 
     w, h = os.get_terminal_size()
-    border(screen, dims=(0, h-5, None, None))
+    border(screen, dims=(0, h-4, None, None))
 
     # prompt marker
-    screen.addch(h-4, 2, '>')
+    screen.addch(h-3, 2, PROMPT)
 
     # cursor position
     curses.curs_set(True)
@@ -34,33 +36,76 @@ def draw_cli_screen(screen: curses.window, title=None):
     screen.refresh()
 
 def handle_input_tui(screen: curses.window): 
-    draw_cli_screen(screen, 'Enter a command ...')
     w, _ = os.get_terminal_size()
 
     # get input char and add to command string if not newline and not longer than width of window 
     curses.echo()
-    input_command = ''
-    while len(input_command) < w-1-4:
-        input_char = screen.getch()
-        if input_char == ord('\n'): 
-            break  # new line 
-        input_command += chr(input_char)
-        screen.refresh()
+    input_command = screen.getstr().decode()
     curses.noecho()
+
+    # clear input from window
+    x, y = get_cursor_prompt_pos()
+    screen.addstr(y, x, ''.join([' ' for _ in range(len(input_command))]))
 
     return input_command
 
-def print(s): 
-        curses
+def print_tui(screen: curses.window, s: str): 
+    lines = []
+    for line in s.split('\n'): 
+        parsed_line = line
+        while len(parsed_line) >= curses.COLS - 4: 
+            lines.append(parsed_line[:curses.COLS-5])
+            parsed_line = parsed_line[curses.COLS-5:]
+        lines.append(parsed_line)
+
+    for idx, line in enumerate(lines): 
+        screen.addstr(2+idx, 2, line)
+
+    x, y = get_cursor_prompt_pos()
+    screen.move(y, x)
 
 def run(repl): 
     if not isinstance(repl, Repl): 
         log.error(f'Invalid obj passed to Repl run command: {repl}')
     
-    if repl.tui: 
+    if isinstance(repl.io, StandardIO): 
         wrapper(repl.run)
     else: 
         repl.run()
+
+concat_stdout = ''
+
+def stdout(s: str): 
+    global concat_stdout
+    concat_stdout += f'{s}\n'
+
+class ReplIO: 
+    def __init__(self): 
+        self.screen = None
+
+    def input(self): 
+        pass
+
+    def print(self): 
+        pass 
+
+class LegacyIO(ReplIO):
+    def input(self): 
+        return input(PROMPT).strip()
+    
+    def print(self): 
+        global concat_stdout
+        print(concat_stdout)
+        concat_stdout = '' 
+
+class StandardIO(ReplIO): 
+    def input(self): 
+        return handle_input_tui(self.screen)
+
+    def print(self): 
+        global concat_stdout
+        print_tui(self.screen, concat_stdout)
+        concat_stdout = ''
 
 class Repl:
 
@@ -82,10 +127,10 @@ class Repl:
             sep = ''.join([' ' for _ in range(self.longest_command + 1 - len(k))]) + '-> '
             s += f'  {k}{sep}{v}\n'
 
-        print(s)
+        stdout(s)
 
     def print_history(self): 
-        print(self.history)
+        stdout(self.history)
 
     # BUILTIN CONSTANTS
     BUILTIN_TO_DESCRIPTION = {
@@ -96,7 +141,7 @@ class Repl:
     }
     
     # INIT FUNCTIONS
-    def __init__(self, prompt='> ', tui=True):
+    def __init__(self, prompt='❯ '):
         self.longest_command = 0  
         self.COMM_TO_FUNC = {}
         self.COMM_TO_DESCRIPTION = {}
@@ -105,15 +150,15 @@ class Repl:
         self.description = ''
         self.running = False
         self.history = ''
-        self.tui = tui
+        self.io = StandardIO()
 
         self.prompt = prompt
         self.BUILTIN_TO_FUNC = {
-        'clear': self.clear,
-        'help': self.print_usage, 
-        'history': self.print_history, 
-        'quit': self.quit, 
-    }
+            'clear': self.clear,
+            'help': self.print_usage, 
+            'history': self.print_history, 
+            'quit': self.quit, 
+        }
 
     def register_commands(self, funcs, descriptions): 
         self.COMM_TO_FUNC = funcs 
@@ -147,19 +192,27 @@ class Repl:
         )
 
     # RUNNING FUNCTIONS
-    def run(self, screen: curses.window = None): 
+    def run(self, screen: curses.window | None = None): 
         self.running = True
+        if screen is not None: 
+            self.io.screen = screen
+
         try: 
+            draw_cli_screen(screen, 'Enter a command ...')
             while self.running: 
-                self.handle_command(screen)
-                break 
+                self.handle_command() 
+                self.io.print()
+                screen.refresh()
             
         except Exception as ex: 
             log.error('Error encountered in repl loop', ex) 
 
-    def handle_command(self, screen: curses.window = None):
-        unparsed_command = handle_input_tui(screen) if self.tui else input(self.prompt).strip() 
+    def handle_command(self):
+        unparsed_command = self.io.input()
         command = [ word.strip() for word in unparsed_command.split() ]
+
+        if isinstance(self.io, StandardIO): 
+            stdout(f'{PROMPT} {unparsed_command}')
 
         if len(command) == 0 or command[0].isspace(): 
             return 

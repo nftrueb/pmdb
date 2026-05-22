@@ -19,9 +19,8 @@ def border(screen: curses.window, title=None, dims=(0,0,None,None)):
     if w is None or x+w > term_dims[0]: 
         w = term_dims[0] - x 
 
-    if h is None or y+h > term_dims[1]: 
+    if h is None or y+h >= term_dims[1]: 
         h = term_dims[1] - y - 1
-        h -= 1
 
     horizontal_border = ''.join([HORIZONTAL_BAR for _ in range(w-2)])
     screen.addstr(y,     x+1, horizontal_border) 
