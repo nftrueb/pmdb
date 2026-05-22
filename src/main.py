@@ -286,7 +286,7 @@ def comm_rm(command):
 
 def comm_add(command): 
     if len(command) not in {2, 3}: 
-        log.error(f'Invalid structure for add command: {' '.join(command)}')
+        stdout(table('ERROR', [f'Invalid structure for add command: {' '.join(command)}'], cols=1, center_align=False))
         return
     
     if command[1] == 'route': 
@@ -315,7 +315,7 @@ def comm_dex(command):
     #     stdout(f' - {pm}')
     # stdout(f'Pokémon caught: {len(dex)}') 
 
-    stdout(table(header='Dex', items=dex, cols=3))
+    stdout(table(header='Dex', items=dex, cols=3, center_align=True))
 
 def comm_list(command): 
     for key, _ in map_graph.items(): 

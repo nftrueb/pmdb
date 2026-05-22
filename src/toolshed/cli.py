@@ -59,6 +59,9 @@ def print_tui(screen: curses.window, s: str):
             parsed_line = parsed_line[curses.COLS-5:]
         lines.append(parsed_line)
 
+    if len(lines) > os.get_terminal_size()[1] - 5 - 2: 
+        lines = lines[:os.get_terminal_size()[1] - 5 - 2]
+
     for idx, line in enumerate(lines): 
         screen.addstr(2+idx, 3, line)
 
@@ -75,7 +78,7 @@ def max_len_list_of_str(items):
 
 # END TOOLSHED FUNCTION
 
-def table(header, items, cols, center_align=True, snap_width=True): 
+def table(header, items, cols, center_align=True, snap_width=False): 
     if center_align: 
         return print_table_center_aligned(header, items, cols, snap_width)
     return print_table_left_aligned(header, items, cols)
@@ -93,7 +96,7 @@ def print_table_center_aligned(header, items, cols, snap_width):
 
     builder = ROUNDED_CORNER_TL + ''.join([ HORIZONTAL_BAR for _ in range(width)]) + ROUNDED_CORNER_TR
     if header is not None: 
-        builder = builder[:2] + header + builder[2+len(header):] + '\n' #TODO fix overflow case
+        builder = f'{builder[:2]} {header} {builder[2+len(header)+2:]}\n' #TODO fix overflow case
 
     chunks = batched(items, cols)
     for chunk in chunks: 
@@ -112,6 +115,7 @@ def print_table_center_aligned(header, items, cols, snap_width):
         prev_padding_len = width - starting_cols[-1] - len(chunk[-1]) 
         row += ''.join([ ' ' for _ in range(prev_padding_len)]) 
         row += f'{VERTICAL_BAR}\n'
+        builder += row
         
     builder += ROUNDED_CORNER_BL + ''.join([ HORIZONTAL_BAR for _ in range(width)]) + ROUNDED_CORNER_BR
     
@@ -119,20 +123,14 @@ def print_table_center_aligned(header, items, cols, snap_width):
 
 def print_table_left_aligned(header, items, cols): 
     # width of terminal - outer border - padding - table border
-    max_possible_width = os.get_terminal_size()[0] - 2 - 4 - 2
+    width = os.get_terminal_size()[0] - 2 - 4 - 2
     pad = ' '
-    width = 0
-    starting_cols = [ i * max_possible_width // cols for i in range(cols) ]
+    starting_cols = [ i * width // cols for i in range(cols) ]
     chunks = batched(items, cols)
-
-    # get length of longest row
-    # width = 2*len(pad) + max_len_list_of_str(items)
-
-    width = max_possible_width
 
     builder = ROUNDED_CORNER_TL + ''.join([ HORIZONTAL_BAR for _ in range(width)]) + ROUNDED_CORNER_TR
     if header is not None: 
-        builder = builder[:2] + header + builder[2+len(header):] + '\n' #TODO fix overflow case
+        builder = f'{builder[:2]} {header} {builder[2+len(header)+2:]}\n' #TODO fix overflow case
 
     for chunk in chunks: 
         row = f'{VERTICAL_BAR}{pad}'
@@ -143,6 +141,9 @@ def print_table_left_aligned(header, items, cols):
             row += ''.join([ ' ' for _ in range(padding_len)])
         row += f'{VERTICAL_BAR}\n'
         builder += row
+
+    builder += ROUNDED_CORNER_BL + ''.join([ HORIZONTAL_BAR for _ in range(width)]) + ROUNDED_CORNER_BR
+    return builder
 
 def run(repl): 
     if not isinstance(repl, Repl): 
