@@ -10,7 +10,7 @@ from pick import pick
 
 from toolshed import get_logger
 from toolshed.files import get_file_layer
-from toolshed.cli import Repl, stdout, run
+from toolshed.cli import Repl, stdout, run, table
 from toolshed.terminal import * 
 
 from constants import * 
@@ -311,9 +311,11 @@ def comm_add(command):
         log.info(f'Failed to add unrecognized Pokémon: {new_pm}')
 
 def comm_dex(command): 
-    for pm in dex: 
-        stdout(f' - {pm}')
-    stdout(f'Pokémon caught: {len(dex)}') 
+    # for pm in dex: 
+    #     stdout(f' - {pm}')
+    # stdout(f'Pokémon caught: {len(dex)}') 
+
+    stdout(table(header='Dex', items=dex, cols=3))
 
 def comm_list(command): 
     for key, _ in map_graph.items(): 
@@ -342,8 +344,12 @@ def comm_last(command):
         stdout(f' - {pm}')
 
 def comm_print_route(command): 
-    if command[1] in map_graph: 
-        stdout(map_graph[command[1]])
+    if command[1] in map_graph:
+        node = map_graph[command[1]]
+        stdout(table('Neighbors', node.neighbors, cols=1, snap_width=True))
+        for encounter_table in node.encounter_tables: 
+            items = [ line for encounter in encounter_table.encounters for line in str(encounter).split('\n') ]
+            stdout(table(encounter_table.method, items, cols=1, snap_width=True))
     else: 
         log.error(f'Area not found in map: {command[1]}')
 

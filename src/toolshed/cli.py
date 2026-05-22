@@ -1,6 +1,7 @@
 import subprocess
 from datetime import datetime
 from curses import wrapper
+from itertools import batched
 
 from . import get_logger
 from .terminal import *
@@ -59,10 +60,89 @@ def print_tui(screen: curses.window, s: str):
         lines.append(parsed_line)
 
     for idx, line in enumerate(lines): 
-        screen.addstr(2+idx, 2, line)
+        screen.addstr(2+idx, 3, line)
 
     x, y = get_cursor_prompt_pos()
     screen.move(y, x)
+
+# TOOLSHED FUNCTION
+
+def max_len_list_of_str(items): 
+    longest = 0
+    for item in items: 
+        longest = max(longest, len(str(item)))
+    return longest
+
+# END TOOLSHED FUNCTION
+
+def table(header, items, cols, center_align=True, snap_width=True): 
+    if center_align: 
+        return print_table_center_aligned(header, items, cols, snap_width)
+    return print_table_left_aligned(header, items, cols)
+
+def print_table_center_aligned(header, items, cols, snap_width): 
+    if snap_width: 
+        cols = 1 
+
+    # width of terminal - outer border - padding - table border
+    max_possible_width = os.get_terminal_size()[0] - 2 - 4 - 2
+    longest_item = max_len_list_of_str(items)
+    pad = ' ' 
+    width = longest_item + 2 * len(pad) if snap_width else max_possible_width
+    starting_cols = [ int((i + 0.5) * width // cols) - longest_item for i in range(cols) ]
+
+    builder = ROUNDED_CORNER_TL + ''.join([ HORIZONTAL_BAR for _ in range(width)]) + ROUNDED_CORNER_TR
+    if header is not None: 
+        builder = builder[:2] + header + builder[2+len(header):] + '\n' #TODO fix overflow case
+
+    chunks = batched(items, cols)
+    for chunk in chunks: 
+        if snap_width:  
+            suffix_padding = ''.join([' ' for _ in range(longest_item - len(str(chunk[0])) + 1)])
+            builder += f'{VERTICAL_BAR}{pad}{chunk[0]}{suffix_padding}{VERTICAL_BAR}\n'
+            continue 
+        
+        row = f'{VERTICAL_BAR}'
+        for idx, item in enumerate(chunk):
+            prev_item_end = starting_cols[idx-1] + len(chunk[idx-1]) if idx > 0 else 0
+            prev_padding_len = starting_cols[idx] - prev_item_end
+            row += ''.join([ ' ' for _ in range(prev_padding_len)]) 
+            row += item
+
+        prev_padding_len = width - starting_cols[-1] - len(chunk[-1]) 
+        row += ''.join([ ' ' for _ in range(prev_padding_len)]) 
+        row += f'{VERTICAL_BAR}\n'
+        
+    builder += ROUNDED_CORNER_BL + ''.join([ HORIZONTAL_BAR for _ in range(width)]) + ROUNDED_CORNER_BR
+    
+    return builder 
+
+def print_table_left_aligned(header, items, cols): 
+    # width of terminal - outer border - padding - table border
+    max_possible_width = os.get_terminal_size()[0] - 2 - 4 - 2
+    pad = ' '
+    width = 0
+    starting_cols = [ i * max_possible_width // cols for i in range(cols) ]
+    chunks = batched(items, cols)
+
+    # get length of longest row
+    # width = 2*len(pad) + max_len_list_of_str(items)
+
+    width = max_possible_width
+
+    builder = ROUNDED_CORNER_TL + ''.join([ HORIZONTAL_BAR for _ in range(width)]) + ROUNDED_CORNER_TR
+    if header is not None: 
+        builder = builder[:2] + header + builder[2+len(header):] + '\n' #TODO fix overflow case
+
+    for chunk in chunks: 
+        row = f'{VERTICAL_BAR}{pad}'
+        for idx, item in enumerate(chunk):
+            next_checkpoint = starting_cols[idx+1] if idx < len(starting_cols)-1 else width-len(pad)
+            padding_len = next_checkpoint - starting_cols[idx] - len(item)
+            row += item
+            row += ''.join([ ' ' for _ in range(padding_len)])
+        row += f'{VERTICAL_BAR}\n'
+        builder += row
 
 def run(repl): 
     if not isinstance(repl, Repl): 
@@ -91,7 +171,7 @@ class ReplIO:
 
 class LegacyIO(ReplIO):
     def input(self): 
-        return input(PROMPT).strip()
+        return input(f'{PROMPT} ').strip()
     
     def print(self): 
         global concat_stdout
@@ -106,6 +186,7 @@ class StandardIO(ReplIO):
         global concat_stdout
         print_tui(self.screen, concat_stdout)
         concat_stdout = ''
+        self.screen.refresh()
 
 class Repl:
 
@@ -150,6 +231,7 @@ class Repl:
         self.description = ''
         self.running = False
         self.history = ''
+        # self.io = LegacyIO()
         self.io = StandardIO()
 
         self.prompt = prompt
@@ -196,13 +278,12 @@ class Repl:
         self.running = True
         if screen is not None: 
             self.io.screen = screen
+            draw_cli_screen(screen, 'Enter a command ...')
 
         try: 
-            draw_cli_screen(screen, 'Enter a command ...')
             while self.running: 
                 self.handle_command() 
                 self.io.print()
-                screen.refresh()
             
         except Exception as ex: 
             log.error('Error encountered in repl loop', ex) 
@@ -212,7 +293,8 @@ class Repl:
         command = [ word.strip() for word in unparsed_command.split() ]
 
         if isinstance(self.io, StandardIO): 
-            stdout(f'{PROMPT} {unparsed_command}')
+            draw_cli_screen(self.io.screen, 'Enter a command ...')
+            # stdout(f'{PROMPT} {unparsed_command}')
 
         if len(command) == 0 or command[0].isspace(): 
             return 
