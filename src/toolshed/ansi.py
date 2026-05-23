@@ -32,3 +32,31 @@ def parse_effects(s: str):
     # loop over all instances of effects 
     while idx != -1: 
         pass 
+
+ESC_CODE_PREFIX = '\033['
+ESC_CODE_SUFFIX = 'm'
+
+def str_without_escape_code(s: str): 
+    slices = []
+    start_idx = 0
+    prefix_idx = s.find(ESC_CODE_PREFIX, start_idx)
+    while prefix_idx != -1:   
+
+        # record position of current slice      
+        slices.append(s[start_idx:prefix_idx])
+
+        # find the escape code suffix and record next starting position
+        suffix_idx = s.find(ESC_CODE_SUFFIX, prefix_idx)
+        if suffix_idx == -1: 
+            return 'ERROR - Could not parse string for ansi escape code'
+        start_idx = suffix_idx + 1
+
+        # break condition if at end of string, otherwise update prefix_idx for next loop
+        if start_idx >= len(s): 
+            break 
+        prefix_idx = s.find(ESC_CODE_PREFIX, start_idx)
+
+    if len(slices) == 0:
+        slices.append(s)
+
+    return ''.join(slices)

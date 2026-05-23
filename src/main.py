@@ -349,7 +349,12 @@ def comm_print_route(command):
         stdout(table('Neighbors', node.neighbors, cols=1, snap_width=True))
         for encounter_table in node.encounter_tables: 
             items = [ line for encounter in encounter_table.encounters for line in str(encounter).split('\n') ]
-            stdout(table(encounter_table.method, items, cols=1, snap_width=True))
+            method = encounter_table.method 
+            if encounter_table.is_completed(): 
+                method += f' {CHECKMARK}'
+            else: 
+                method += f' {RED_CROSS}'
+            stdout(table(method, items, cols=1, snap_width=True))
     else: 
         log.error(f'Area not found in map: {command[1]}')
 
@@ -450,6 +455,13 @@ def comm_trade(command):
             encounter.species = species
             log.info(f'Logged trade pokemon: {species}')
 
+def comm_moves(command): 
+    try: 
+        pm = command[1]
+        stdout(f'https://bulbapedia.bulbagarden.net/wiki/{pm.title()}_(Pokémon)/Generation_IV_learnset#By_leveling_up')
+    except: 
+        stdout('ERROR: invalid "moves" command')
+
 REPL_FUNC_MAP = {
     'add'   : comm_add, 
     'dex'   : comm_dex, 
@@ -462,6 +474,7 @@ REPL_FUNC_MAP = {
     'x': comm_print_route, 
     'menu': comm_menu,
     'trade': comm_trade,
+    'moves': comm_moves, 
 }
 
 def init_repl(): 

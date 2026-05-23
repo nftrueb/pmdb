@@ -35,11 +35,11 @@ BACK_OPT = '- BACK -'
 GET_TOTAL_PM_LIST_OPT = 'Get Total List of Pokémon'
 
 # Unicode
-CHECKMARK = '✔' # '\u2705'
-RED_CROSS = '✘' # '\u274C'
+# CHECKMARK = '✔' # '\u2705'
+# RED_CROSS = '✘' # '\u274C'
 
-CHECKMARK_COLOR = '\033[32m✔\033[0m' # '\u2705'
-RED_CROSS_COLOR = '\033[31m✘\033[0m' # '\u274C'
+CHECKMARK = '\033[32m✔\033[0m' # '\u2705'
+RED_CROSS = '\033[31m✘\033[0m' # '\u274C'
 
 
 # Feature Flags 

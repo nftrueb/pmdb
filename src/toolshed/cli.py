@@ -5,6 +5,7 @@ from itertools import batched
 
 from . import get_logger
 from .terminal import *
+from .ansi import str_without_escape_code
 
 log = get_logger() 
 
@@ -84,19 +85,21 @@ def table(header, items, cols, center_align=True, snap_width=False):
     return print_table_left_aligned(header, items, cols)
 
 def print_table_center_aligned(header, items, cols, snap_width): 
+    header_without_ansi_escape_codes = str_without_escape_code(header)
+
     if snap_width: 
         cols = 1 
 
     # width of terminal - outer border - padding - table border
     max_possible_width = os.get_terminal_size()[0] - 2 - 4 - 2
-    longest_item = max_len_list_of_str(items)
+    longest_item = max_len_list_of_str(items + [f' {header_without_ansi_escape_codes} '])
     pad = ' ' 
     width = longest_item + 2 * len(pad) if snap_width else max_possible_width
     starting_cols = [ int((i + 0.5) * width // cols) - longest_item for i in range(cols) ]
 
     builder = ROUNDED_CORNER_TL + ''.join([ HORIZONTAL_BAR for _ in range(width)]) + ROUNDED_CORNER_TR
     if header is not None: 
-        builder = f'{builder[:2]} {header} {builder[2+len(header)+2:]}\n' #TODO fix overflow case
+        builder = f'{builder[:2]} {header} {builder[2+len(header_without_ansi_escape_codes)+2:]}\n' #TODO fix overflow case
 
     chunks = batched(items, cols)
     for chunk in chunks: 
@@ -176,6 +179,8 @@ class LegacyIO(ReplIO):
     
     def print(self): 
         global concat_stdout
+        if len(concat_stdout) == 0: 
+            return 
         print(concat_stdout)
         concat_stdout = '' 
 
@@ -232,8 +237,8 @@ class Repl:
         self.description = ''
         self.running = False
         self.history = ''
-        # self.io = LegacyIO()
-        self.io = StandardIO()
+        self.io = LegacyIO()
+        # self.io = StandardIO()
 
         self.prompt = prompt
         self.BUILTIN_TO_FUNC = {
