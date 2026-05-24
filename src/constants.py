@@ -29,6 +29,7 @@ THROW_AWAY_HEADERS = {
 }
 
 TOTAL_PM_LIST_URL = 'https://www.serebii.net/pokemon/nationalpokedex.shtml'
+TOTAL_MOVE_LIST_URL = 'https://bulbapedia.bulbagarden.net/wiki/List_of_moves'
 
 # Pick 
 BACK_OPT = '- BACK -'

@@ -28,6 +28,7 @@ context = {
 area_data = {}
 dex = []
 total_pm_list = []
+total_moves_list = []
 map_graph = {}
 
 pm_list_segmented = {}
@@ -158,6 +159,20 @@ def get_total_pm_list_data():
     national_dex = pm_list_segmented['gen3'] + pm_list_segmented['gen4']
     log.info(f'Created National Dex. Count: {len(national_dex)}')
 
+def get_total_move_list_data(): 
+    global total_moves_list
+    soup = get_site_data(TOTAL_MOVE_LIST_URL)
+    move_table_rows = soup.find(
+        'table', class_=['sortable', 'roundy', 'jquery-tablesorter']
+    ).find(
+        'table', class_=['sortable', 'roundy', 'jquery-tablesorter']
+    ).find(
+        'tbody'
+    ).find_all('tr', recursive=False)
+
+    total_moves_list = [ row.find('a').string for row in move_table_rows ][1:]
+    print(total_moves_list)
+
 def get_new_area_data(area_name: str): 
     soup = get_site_data(get_area_url(area_name))
     parsed_encounter_tables = []
@@ -226,7 +241,7 @@ def as_node(data: dict) -> Node:
     )
 
 def read_save_data(): 
-    global area_data, dex, total_pm_list, map_graph, national_dex
+    global area_data, dex, total_pm_list, total_moves_list, map_graph, national_dex
     global headbutt_unlocked, national_dex_unlocked, surf_unlocked
     global old_rod_unlocked, good_rod_unlocked, super_rod_unlocked
 
@@ -235,6 +250,7 @@ def read_save_data():
         data = file_layer.load_json(SAVE_FN) 
         dex = data['dex']
         total_pm_list = data['total_pm_list']
+        total_moves_list = data['total_moves_list']
         national_dex = data['national_dex']
         headbutt_unlocked = data['headbutt_unlocked']
         national_dex_unlocked = data['national_dex_unlocked']
@@ -255,6 +271,7 @@ def write_save_data():
             "dex": dex, 
             "map": map_graph, 
             "total_pm_list": total_pm_list, 
+            "total_moves_list": total_moves_list,
             "national_dex": national_dex,  
             "headbutt_unlocked": headbutt_unlocked, 
             "national_dex_unlocked": national_dex_unlocked,
@@ -371,66 +388,92 @@ def comm_menu(command):
     global old_rod_unlocked, good_rod_unlocked, super_rod_unlocked
 
     options = [
-        'tui', 
-        GET_TOTAL_PM_LIST_OPT, 
+        'Toggle', 
+        'Get Website Data', 
+        'Print', 
+        BACK_OPT
+    ]
+
+    toggle_options = [
+        'Toggle Headbutt Unlock', 
+        'Toggle Old Rod Unlock',
+        'Toggle Surf Unlock',
+        'Toggle Good Rod Unlock',
+        'Toggle Super Rod Unlock',
+        'Toggle National Dex Unlock',
+        BACK_OPT
+    ]
+
+    get_website_data_options = [
+        'Get Total List of Moves', 
+        'Get Total List of Pokémon',
+        BACK_OPT
+    ]
+
+    print_options = [
+        'Print Current Dex',
         'Print Gen 1', 
         'Print Gen 2', 
         'Print Gen 3', 
         'Print Gen 4', 
         'Print National Dex',
-        'Toggle Headbutt Unlock', 
-        'Toggle National Dex Unlock',
-        'Toggle Surf Unlock',
-        'Toggle Old Rod Unlock',
-        'Toggle Good Rod Unlock',
-        'Toggle Super Rod Unlock',
         BACK_OPT
     ]
-    option, _ = pick(options, 'Standalone Scripts:')
 
-    stdout(option)
+    option, _ = pick(options, 'Options:')
+
+    if option == 'Toggle': 
+        option, _ = pick(toggle_options, 'Options - Toggle:') 
+
+        if option == 'Toggle Headbutt Unlock': 
+            log.info(f'Toggling Headbutt unlock from {headbutt_unlocked} to {not headbutt_unlocked}')
+            headbutt_unlocked = not headbutt_unlocked
+
+        elif option == 'Toggle National Dex Unlock': 
+            log.info(f'Toggling National Dex unlock from {national_dex_unlocked} to {not national_dex_unlocked}')
+            national_dex_unlocked = not national_dex_unlocked
+
+        elif option == 'Toggle Surf Unlock': 
+            log.info(f'Toggling Surf Unlock from {surf_unlocked} to {not surf_unlocked}')
+            surf_unlocked = not surf_unlocked
+
+        elif option == 'Toggle Old Rod Unlock': 
+            log.info(f'Toggling Old Rod Unlock from {old_rod_unlocked} to {not old_rod_unlocked}')
+            old_rod_unlocked = not old_rod_unlocked
+
+        elif option == 'Toggle Good Rod Unlock': 
+            log.info(f'Toggling Good Rod Unlock from {good_rod_unlocked} to {not good_rod_unlocked}')
+            good_rod_unlocked = not good_rod_unlocked
+
+        elif option == 'Toggle Super Rod Unlock': 
+            log.info(f'Toggling Super Rod Unlock from {super_rod_unlocked} to {not super_rod_unlocked}')
+            super_rod_unlocked = not super_rod_unlocked
+
+    elif option == 'Get Website Data': 
+        option, _ = pick(get_website_data_options, 'Options - Get Website Data:')  
+
+        if option == 'Get Total List of Pokémon': 
+            get_total_pm_list_data()
+
+        elif option == 'Get Total List of Moves': 
+            get_total_move_list_data()
+            
+    elif option == 'Print': 
+        option, _ = pick(print_options, 'Option - Print:') 
     
-    if option == GET_TOTAL_PM_LIST_OPT: 
-        get_total_pm_list_data()
+        if option == 'Print Total List of Moves': 
+            stdout(table('Total Moves', total_moves_list, cols=3, center_align=True))
 
-    elif option == 'tui': 
-        import curses
-        stdout(curses.wrapper(draw_display_and_wait_for_input))
+        elif option.startswith('Print Gen'): 
+            gen = ''.join(option.split(' ')[1:]).lower()
+            stdout(f'Printing {gen}')
+            stdout(table(f'Generation {gen}', pm_list_segmented[gen], cols=3, center_align=True))
 
-    elif option.startswith('Print Gen'): 
-        gen = ''.join(option.split(' ')[1:]).lower()
-        stdout(f'Printing {gen}')
-        for p in pm_list_segmented[gen]: 
-            stdout(p)
+        elif option == 'Print National Dex': 
+            stdout(table('National Dex', national_dex, cols=3, center_align=True))
 
-    elif option == 'Print National Dex': 
-        for p in national_dex: 
-            stdout(p)
-        stdout(f'Count: {len(national_dex)}')
-
-    elif option == 'Toggle Headbutt Unlock': 
-        log.info(f'Toggling Headbutt unlock from {headbutt_unlocked} to {not headbutt_unlocked}')
-        headbutt_unlocked = not headbutt_unlocked
-
-    elif option == 'Toggle National Dex Unlock': 
-        log.info(f'Toggling National Dex unlock from {national_dex_unlocked} to {not national_dex_unlocked}')
-        national_dex_unlocked = not national_dex_unlocked
-
-    elif option == 'Toggle Surf Unlock': 
-        log.info(f'Toggling Surf Unlock from {surf_unlocked} to {not surf_unlocked}')
-        surf_unlocked = not surf_unlocked
-
-    elif option == 'Toggle Old Rod Unlock': 
-        log.info(f'Toggling Old Rod Unlock from {old_rod_unlocked} to {not old_rod_unlocked}')
-        old_rod_unlocked = not old_rod_unlocked
-
-    elif option == 'Toggle Good Rod Unlock': 
-        log.info(f'Toggling Good Rod Unlock from {good_rod_unlocked} to {not good_rod_unlocked}')
-        good_rod_unlocked = not good_rod_unlocked
-
-    elif option == 'Toggle Super Rod Unlock': 
-        log.info(f'Toggling Super Rod Unlock from {super_rod_unlocked} to {not super_rod_unlocked}')
-        super_rod_unlocked = not super_rod_unlocked
+        elif option == 'Print Current Dex': 
+            comm_dex(None)
 
 def comm_trade(command): 
     if len(command) != 3: 
