@@ -1,8 +1,6 @@
-import sys 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List
-from json import JSONEncoder, JSONDecoder
-from datetime import datetime
+from json import JSONEncoder
 
 import requests 
 from bs4 import BeautifulSoup
@@ -127,7 +125,12 @@ class Encounter:
         return self.species in dex
 
     def __str__(self): 
-        s = f'Species: { self.species if self.is_completed() else '---' }\n'
+        species_name = self.species
+        if not self.is_completed(): 
+            species_name = '---'
+        if self.species.lower() in national_dex and not national_dex_unlocked: 
+            species_name = '- NAT DEX REQUIRED -'
+        s = f'Species: { species_name }\n'
         s += f'Rate: { self.rate if self.rate is not None else '-' }'
         return s
     
@@ -282,6 +285,8 @@ def write_save_data():
         }
         file_layer = get_file_layer()
         file_layer.write_json(SAVE_FN, data, cls=NodeEncoder) 
+
+        comm_load(None)
     except Exception as ex: 
         log.error('Failed to write save data', ex)
 
@@ -336,14 +341,14 @@ def comm_dex(command):
 
 def comm_list(command): 
     for key, _ in map_graph.items(): 
+        if len(map_graph[key].encounter_tables) == 0: 
+            continue 
         is_completed = True
         for table in map_graph[key].encounter_tables: 
             if not table.is_completed(): 
                 is_completed = False 
                 break
         stdout(f' {CHECKMARK if is_completed else RED_CROSS} {key}') 
-
-    stdout(f'Total areas: {len(area_data.keys())}')
 
 def comm_save(command): 
     write_save_data()  
