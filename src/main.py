@@ -15,7 +15,7 @@ from constants import *
 
 # Toolshed vars
 log = get_logger()
-file_layer = get_file_layer()
+file_layer = get_file_layer(APPNAME)
 
 # Global vars
 context = {
@@ -243,13 +243,12 @@ def as_node(data: dict) -> Node:
         [ as_encounter_table(table_data) for table_data in data['encounter_tables'] ]
     )
 
-def read_save_data(): 
+def read_save_data(repl: Repl): 
     global area_data, dex, total_pm_list, total_moves_list, map_graph, national_dex
     global headbutt_unlocked, national_dex_unlocked, surf_unlocked
     global old_rod_unlocked, good_rod_unlocked, super_rod_unlocked
 
     try: 
-        file_layer = get_file_layer()
         data = file_layer.load_json(SAVE_FN) 
         dex = data['dex']
         total_pm_list = data['total_pm_list']
@@ -261,6 +260,7 @@ def read_save_data():
         old_rod_unlocked = data['old_rod_unlocked']
         good_rod_unlocked = data['good_rod_unlocked']
         super_rod_unlocked = data['super_rod_unlocked']
+        repl.history = data['history']
         for k, v in data['map'].items():
             map_graph[k] = as_node(v)
 
@@ -268,7 +268,7 @@ def read_save_data():
         log.error('Failed to read save data', ex)
     
 
-def write_save_data():
+def write_save_data(repl: Repl):
     try: 
         data = {
             "dex": dex, 
@@ -282,11 +282,9 @@ def write_save_data():
             "old_rod_unlocked": old_rod_unlocked, 
             "good_rod_unlocked": good_rod_unlocked, 
             "super_rod_unlocked": good_rod_unlocked, 
+            "history": repl.get_capped_history(), 
         }
-        file_layer = get_file_layer()
         file_layer.write_json(SAVE_FN, data, cls=NodeEncoder) 
-
-        comm_load(None)
     except Exception as ex: 
         log.error('Failed to write save data', ex)
 
@@ -325,10 +323,13 @@ def comm_add(command):
         return 
     
     new_pm = command[1].title()
-    if new_pm.lower() in total_pm_list: 
+    if new_pm in dex: 
+        log.info(f'{new_pm} is already in dex')
+
+    elif new_pm.lower() in total_pm_list: 
         dex.append(new_pm)
         log.info(f'Successfully added new Pokémon: {new_pm}')
-        write_save_data()
+
     else: 
         log.info(f'Failed to add unrecognized Pokémon: {new_pm}')
 
@@ -351,10 +352,12 @@ def comm_list(command):
         stdout(f' {CHECKMARK if is_completed else RED_CROSS} {key}') 
 
 def comm_save(command): 
-    write_save_data()  
+    print('[ERROR] Save command not working right now')
+    # write_save_data(None)  
 
 def comm_load(command): 
-    read_save_data()
+    # read_save_data()
+    log.error('Load command is not setup right now')
 
 def comm_last(command): 
     if len(command) > 2 or (len(command) == 2 and not command[1].isdigit()): 
@@ -532,11 +535,17 @@ def init_repl():
     return repl
 
 def main(): 
-    file_layer.init(APPNAME)
-    read_save_data()
+    try: 
+        repl = init_repl()
+        read_save_data(repl)
+        
+        # Entry point for main REPL loop 
+        run(repl)
 
-    repl = init_repl()
-    run(repl)
+    finally: 
+        if True: 
+            write_save_data(repl)
+            log.debug('Successfully saved data before exiting')
 
 if __name__ == '__main__': 
     main()

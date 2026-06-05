@@ -115,7 +115,7 @@ def print_table_center_aligned(header, items, cols, snap_width):
             row += ''.join([ ' ' for _ in range(prev_padding_len)]) 
             row += item
 
-        prev_padding_len = width - starting_cols[-1] - len(chunk[-1]) 
+        prev_padding_len = width - starting_cols[len(chunk)-1] - len(chunk[-1]) 
         row += ''.join([ ' ' for _ in range(prev_padding_len)]) 
         row += f'{VERTICAL_BAR}\n'
         builder += row
@@ -196,6 +196,8 @@ class StandardIO(ReplIO):
 
 class Repl:
 
+    MAX_HISTORY_DEPTH = 100
+
     # BUILTIN COMMANDS
     def clear(self): 
         subprocess.run(['clear']) 
@@ -217,7 +219,7 @@ class Repl:
         stdout(s)
 
     def print_history(self): 
-        stdout(self.history)
+        stdout('\n'.join(self.history))
 
     # BUILTIN CONSTANTS
     BUILTIN_TO_DESCRIPTION = {
@@ -236,7 +238,7 @@ class Repl:
         self.usage = ''
         self.description = ''
         self.running = False
-        self.history = ''
+        self.history = []
         self.io = LegacyIO()
         # self.io = StandardIO()
 
@@ -305,7 +307,7 @@ class Repl:
         if len(command) == 0 or command[0].isspace(): 
             return 
         
-        self.history += f'{datetime.now().strftime('%Y/%m/%d %H:%M:%S')} - {unparsed_command}\n'
+        self.history.append(f'{datetime.now().strftime('%m/%d %H:%M:%S')} - {unparsed_command}')
 
         if command[0] in self.COMM_TO_FUNC.keys(): 
             self.COMM_TO_FUNC[command[0]](command)
@@ -315,3 +317,8 @@ class Repl:
 
         else: 
             log.error(f'Failed to parse command')
+
+    def get_capped_history(self): 
+        if len(self.history) > self.MAX_HISTORY_DEPTH: 
+            return self.history[:self.MAX_HISTORY_DEPTH]
+        return self.history

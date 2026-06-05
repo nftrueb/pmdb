@@ -1,27 +1,26 @@
 import os 
 import json 
 from platformdirs import user_data_dir
+from . import get_logger
+
+log = get_logger() 
 
 class FatalFileException(Exception): 
     def __init__(self, message=None): 
         super().__init__(message or 'Fatal exception occurred in file layer')
 
 class FileLayer: 
-    def __init__(self): 
-        self.initialized = False  
-        self.appname = None
+    def __init__(self, appname: str): 
+        if appname is None: 
+            raise FatalFileException('No appname provided to FileLayer')
+        self.appname = appname
+        self.init_data_dir(appname)
 
     def __str__(self): 
         return f'FileLayer:\nAppname: {self.appname}\nData dir: {user_data_dir(self.appname)}'
     
     def init(self, appname: str): 
-        if appname is None: 
-            raise FatalFileException('No appname provided to FileLayer')
-        self.appname = appname
-
-        self.init_data_dir(appname)
-
-        self.initialized = True 
+        log.error('init() is no longer used ... all initalization was moved to constructor')
 
     def init_data_dir(self, appname: str): 
         data_path = user_data_dir(appname)
@@ -85,7 +84,5 @@ class FileLayer:
         if length != len(text): 
             raise FatalFileException(f'Failed to write text data to file: {filename}')
             
-file_layer = FileLayer()
-
-def get_file_layer(): 
-    return file_layer
+def get_file_layer(appname: str): 
+    return FileLayer(appname)
