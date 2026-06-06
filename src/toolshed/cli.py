@@ -1,4 +1,6 @@
 import subprocess
+import readline
+import atexit
 from datetime import datetime
 from curses import wrapper
 from itertools import batched
@@ -219,7 +221,8 @@ class Repl:
         stdout(s)
 
     def print_history(self): 
-        stdout('\n'.join(self.history))
+        for i in range(readline.get_current_history_length()): 
+            stdout(f' {i:03} - {readline.get_history_item(i+1)}')
 
     # BUILTIN CONSTANTS
     BUILTIN_TO_DESCRIPTION = {
@@ -230,7 +233,7 @@ class Repl:
     }
     
     # INIT FUNCTIONS
-    def __init__(self, prompt='❯ '):
+    def __init__(self, appname, prompt='❯ '):
         self.longest_command = 0  
         self.COMM_TO_FUNC = {}
         self.COMM_TO_DESCRIPTION = {}
@@ -238,7 +241,6 @@ class Repl:
         self.usage = ''
         self.description = ''
         self.running = False
-        self.history = []
         self.io = LegacyIO()
         # self.io = StandardIO()
 
@@ -249,6 +251,15 @@ class Repl:
             'history': self.print_history, 
             'quit': self.quit, 
         }
+
+        # load history
+        history_file = os.path.expanduser(f'~/.{appname.lower()}_history')
+        try: 
+            readline.read_history_file(history_file)
+        except FileNotFoundError: 
+            log.info(f'History file not found at {history_file}') 
+        atexit.register(readline.write_history_file, history_file)
+        readline.set_history_length(self.MAX_HISTORY_DEPTH)
 
     def register_commands(self, funcs, descriptions): 
         self.COMM_TO_FUNC = funcs 
@@ -306,8 +317,6 @@ class Repl:
 
         if len(command) == 0 or command[0].isspace(): 
             return 
-        
-        self.history.append(f'{datetime.now().strftime('%m/%d %H:%M:%S')} - {unparsed_command}')
 
         if command[0] in self.COMM_TO_FUNC.keys(): 
             self.COMM_TO_FUNC[command[0]](command)
@@ -317,8 +326,3 @@ class Repl:
 
         else: 
             log.error(f'Failed to parse command')
-
-    def get_capped_history(self): 
-        if len(self.history) > self.MAX_HISTORY_DEPTH: 
-            return self.history[:self.MAX_HISTORY_DEPTH]
-        return self.history

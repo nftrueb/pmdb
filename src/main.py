@@ -260,7 +260,6 @@ def read_save_data(repl: Repl):
         old_rod_unlocked = data['old_rod_unlocked']
         good_rod_unlocked = data['good_rod_unlocked']
         super_rod_unlocked = data['super_rod_unlocked']
-        repl.history = data['history']
         for k, v in data['map'].items():
             map_graph[k] = as_node(v)
 
@@ -282,7 +281,6 @@ def write_save_data(repl: Repl):
             "old_rod_unlocked": old_rod_unlocked, 
             "good_rod_unlocked": good_rod_unlocked, 
             "super_rod_unlocked": good_rod_unlocked, 
-            "history": repl.get_capped_history(), 
         }
         file_layer.write_json(SAVE_FN, data, cls=NodeEncoder) 
     except Exception as ex: 
@@ -529,7 +527,7 @@ REPL_FUNC_MAP = {
 }
 
 def init_repl(): 
-    repl = Repl()
+    repl = Repl(APPNAME)
     repl.register_commands(REPL_FUNC_MAP, REPL_DESCRIPTION_MAP)
     repl.register_usage(REPL_USAGE, REPL_DESCRIPTION_STR)
     return repl
